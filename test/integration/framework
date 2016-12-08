@@ -528,6 +528,10 @@ EOF
 	testempty --nomsg gcc -Wall -Wextra -fPIC -shared -o noopchroot.so noopchroot.c -ldl
 }
 configcompression() {
+	if [ "$1" = 'ALL' ]; then
+		configcompression '.' $(aptconfig dump APT::Compressor --format '%t %v%n' | sed -n 's#^Extension \.\(.*\)$#\1#p')
+		return
+	fi
 	local CMD='apthelper cat-file -C'
 	while [ -n "$1" ]; do
 		case "$1" in
@@ -952,7 +956,7 @@ buildaptarchivefromfiles() {
 }
 
 compressfile() {
-	cat "${TMPWORKINGDIRECTORY}/rootdir/etc/testcase-compressor.conf" | while read compressor extension command; do
+	while read compressor extension command; do
 		if [ "$compressor" = '.' ]; then
 			if [ -n "$2" ]; then
 				touch -d "$2" "$1"
@@ -963,7 +967,7 @@ compressfile() {
 		if [ -n "$2" ]; then
 			touch -d "$2" "${1}.${extension}"
 		fi
-	done
+	done < "${TMPWORKINGDIRECTORY}/rootdir/etc/testcase-compressor.conf"
 }
 
 # can be overridden by testcases for their pleasure
@@ -1858,6 +1862,11 @@ pause() {
 	read IGNORE
 }
 
+logcurrentarchivedirectory() {
+	find "${TMPWORKINGDIRECTORY}/aptarchive/dists" -type f | while read line; do
+		stat --format '%U:%G:%a:%n' "$line"
+	done | sort > "${TMPWORKINGDIRECTORY}/rootdir/var/log/aptgetupdate.before.lst"
+}
 listcurrentlistsdirectory() {
 	{
 		find rootdir/var/lib/apt/lists -maxdepth 1 -type d | while read line; do
@@ -1935,6 +1944,10 @@ aptautotest_aptget_update() {
 	if [ "$TESTCALL" = 'testsuccess' ]; then
 		# failure cases can retain partial files and such
 		testempty find "${TMPWORKINGDIRECTORY}/rootdir/var/lib/apt/lists/partial" -mindepth 1 ! \( -name 'lock' -o -name '*.FAILED' \)
+	fi
+	if [ -s "${TMPWORKINGDIRECTORY}/rootdir/var/log/aptgetupdate.before.lst" ]; then
+		testfileequal "${TMPWORKINGDIRECTORY}/rootdir/var/log/aptgetupdate.before.lst" \
+			"$(find "${TMPWORKINGDIRECTORY}/aptarchive/dists" -type f | while read line; do stat --format '%U:%G:%a:%n' "$line"; done | sort)"
 	fi
 }
 aptautotest_apt_update() { aptautotest_aptget_update "$@"; }

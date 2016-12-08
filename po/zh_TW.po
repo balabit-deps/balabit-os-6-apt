@@ -6,9 +6,9 @@
 # $Id: zh_TW.po,v 1.11 2004/04/30 04:50:38 mdz Exp $
 msgid ""
 msgstr ""
-"Project-Id-Version: apt 0.5.4\n"
+"Project-Id-Version: apt 1.2.X\n"
 "Report-Msgid-Bugs-To: APT Development Team <deity@lists.debian.org>\n"
-"POT-Creation-Date: 2016-05-11 10:57+0200\n"
+"POT-Creation-Date: 2016-10-31 15:29+0100\n"
 "PO-Revision-Date: 2009-01-28 10:41+0800\n"
 "Last-Translator: Tetralet <tetralet@gmail.com>\n"
 "Language-Team: Debian-user in Chinese [Big5] <debian-chinese-big5@lists."
@@ -55,7 +55,7 @@ msgid " [Working]"
 msgstr " [工作中]"
 
 #: apt-private/acqprogress.cc
-#, fuzzy, c-format
+#, c-format
 msgid ""
 "Media change: please insert the disc labeled\n"
 " '%s'\n"
@@ -118,14 +118,12 @@ msgid "Package %s is a virtual package provided by:\n"
 msgstr "套件 %s 是虛擬套件，提供者為：\n"
 
 #: apt-private/private-cacheset.cc
-#, fuzzy
 msgid " [Installed]"
 msgstr "【已安裝】"
 
 #: apt-private/private-cacheset.cc
-#, fuzzy
 msgid " [Not candidate version]"
-msgstr "候選版本"
+msgstr "【非候選版本】"
 
 #: apt-private/private-cacheset.cc
 msgid "You should explicitly select one to install."
@@ -146,7 +144,7 @@ msgid "However the following packages replace it:"
 msgstr "然而，下列的套件取代了它："
 
 #: apt-private/private-cacheset.cc
-#, fuzzy, c-format
+#, c-format
 msgid "Package '%s' has no installation candidate"
 msgstr "套件 %s 沒有可安裝的候選版本"
 
@@ -365,7 +363,6 @@ msgid "Abort."
 msgstr "放棄執行。"
 
 #: apt-private/private-install.cc
-#, fuzzy
 msgid "Do you want to continue?"
 msgstr "是否繼續進行 [Y/n]？"
 
@@ -465,7 +462,6 @@ msgstr ""
 "決方案）。"
 
 #: apt-private/private-install.cc
-#, fuzzy
 msgid "The following additional packages will be installed:"
 msgstr "下列的額外套件將被安裝："
 
@@ -1504,13 +1500,9 @@ msgstr "在解析 '%s:%s' (%i) 時出了怪事"
 msgid "Unable to connect to %s:%s:"
 msgstr "無法連線至 %s %s："
 
-#: methods/copy.cc methods/store.cc
+#: methods/copy.cc
 msgid "Failed to stat"
 msgstr "無法取得狀態"
-
-#: methods/copy.cc methods/rred.cc methods/store.cc
-msgid "Failed to set modification time"
-msgstr "無法設定修改時間"
 
 #: methods/file.cc
 msgid "Invalid URI, local URIS must not start with //"
@@ -1777,6 +1769,10 @@ msgstr ""
 msgid "Failed to stat %s"
 msgstr "無法取得 %s 的狀態"
 
+#: methods/rred.cc
+msgid "Failed to set modification time"
+msgstr "無法設定修改時間"
+
 #: methods/rsh.cc ftparchive/multicompress.cc
 msgid "Failed to create IPC pipe to subprocess"
 msgstr "無法和子程序建立 IPC 管線"
@@ -1790,12 +1786,12 @@ msgid "Waiting for headers"
 msgstr "等待標頭"
 
 #: methods/server.cc
-msgid "Bad header line"
-msgstr "標頭行錯誤"
-
-#: methods/server.cc
 msgid "The HTTP server sent an invalid reply header"
 msgstr "HTTP 伺服器傳送了一個無效的回覆標頭"
+
+#: methods/server.cc
+msgid "Bad header line"
+msgstr "標頭行錯誤"
 
 #: methods/server.cc
 msgid "The HTTP server sent an invalid Content-Length header"
@@ -3629,9 +3625,9 @@ msgid "Cannot convert %s to integer: out of range"
 msgstr ""
 
 #: apt-pkg/update.cc
-#, fuzzy, c-format
+#, c-format
 msgid "Failed to fetch %s  %s"
-msgstr "無法取得 %s，%s\n"
+msgstr "無法取得 %s，%s"
 
 #: apt-pkg/update.cc
 #, fuzzy

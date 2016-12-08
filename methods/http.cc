@@ -498,20 +498,22 @@ APT_PURE Hashes * HttpServerState::GetHashes()				/*{{{*/
 }
 									/*}}}*/
 // HttpServerState::Die - The server has closed the connection.		/*{{{*/
-bool HttpServerState::Die(FileFd &File)
+bool HttpServerState::Die(FileFd * const File)
 {
    unsigned int LErrno = errno;
 
    // Dump the buffer to the file
    if (State == ServerState::Data)
    {
+      if (File == nullptr)
+	 return true;
       // on GNU/kFreeBSD, apt dies on /dev/null because non-blocking
       // can't be set
-      if (File.Name() != "/dev/null")
-	 SetNonBlock(File.Fd(),false);
+      if (File->Name() != "/dev/null")
+	 SetNonBlock(File->Fd(),false);
       while (In.WriteSpace() == true)
       {
-	 if (In.Write(File.Fd()) == false)
+	 if (In.Write(File->Fd()) == false)
 	    return _error->Errno("write",_("Error writing to the file"));
 
 	 // Done
@@ -630,7 +632,7 @@ bool HttpServerState::Go(bool ToFile, FileFd * const File)
    if (Res == 0)
    {
       _error->Error(_("Connection timed out"));
-      return Die(*File);
+      return Die(File);
    }
    
    // Handle server IO
@@ -638,14 +640,14 @@ bool HttpServerState::Go(bool ToFile, FileFd * const File)
    {
       errno = 0;
       if (In.Read(ServerFd) == false)
-	 return Die(*File);
+	 return Die(File);
    }
 	 
    if (ServerFd != -1 && FD_ISSET(ServerFd,&wfds))
    {
       errno = 0;
       if (Out.Write(ServerFd) == false)
-	 return Die(*File);
+	 return Die(File);
    }
 
    // Send data to the file
@@ -708,7 +710,7 @@ void HttpMethod::SendReq(FetchItem *Itm)
       C.f. https://tools.ietf.org/wg/httpbis/trac/ticket/158 */
    Req << "GET " << requesturi << " HTTP/1.1\r\n";
    if (Uri.Port != 0)
-      Req << "Host: " << ProperHost << ":" << Uri.Port << "\r\n";
+      Req << "Host: " << ProperHost << ":" << std::to_string(Uri.Port) << "\r\n";
    else
       Req << "Host: " << ProperHost << "\r\n";
 
@@ -717,7 +719,7 @@ void HttpMethod::SendReq(FetchItem *Itm)
       Req << "Cache-Control: no-cache\r\n"
 	 << "Pragma: no-cache\r\n";
    else if (Itm->IndexFile == true)
-      Req << "Cache-Control: max-age=" << _config->FindI("Acquire::http::Max-Age",0) << "\r\n";
+      Req << "Cache-Control: max-age=" << std::to_string(_config->FindI("Acquire::http::Max-Age",0)) << "\r\n";
    else if (_config->FindB("Acquire::http::No-Store",false) == true)
       Req << "Cache-Control: no-store\r\n";
 

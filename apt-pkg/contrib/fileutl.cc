@@ -916,9 +916,12 @@ bool ChangeOwnerAndPermissionOfFile(char const * const requester, char const * c
       // ensure the file is owned by root and has good permissions
       struct passwd const * const pw = getpwnam(user);
       struct group const * const gr = getgrnam(group);
-      if (pw != NULL && gr != NULL && chown(file, pw->pw_uid, gr->gr_gid) != 0)
+      if (pw != NULL && gr != NULL && lchown(file, pw->pw_uid, gr->gr_gid) != 0)
 	 Res &= _error->WarningE(requester, "chown to %s:%s of file %s failed", user, group, file);
    }
+   struct stat Buf;
+   if (lstat(file, &Buf) != 0 || S_ISLNK(Buf.st_mode))
+      return Res;
    if (chmod(file, mode) != 0)
       Res &= _error->WarningE(requester, "chmod 0%o of file %s failed", mode, file);
    return Res;
@@ -1255,9 +1258,8 @@ public:
 
 	 writebuffer.bufferstart += written;
       }
-
       writebuffer.reset();
-      return true;
+      return wrapped->InternalFlush();
    }
    virtual ssize_t InternalWrite(void const * const From, unsigned long long const Size) APT_OVERRIDE
    {
@@ -1535,7 +1537,7 @@ public:
 	 return false;
 
       unsigned int flags = (Mode & (FileFd::WriteOnly|FileFd::ReadOnly));
-      if (backend.OpenDescriptor(iFd, flags) == false)
+      if (backend.OpenDescriptor(iFd, flags, FileFd::None, true) == false)
 	 return false;
 
       // Write the file header
@@ -1642,6 +1644,11 @@ public:
       {
 	 res = LZ4F_freeDecompressionContext(dctx);
 	 dctx = nullptr;
+      }
+      if (backend.IsOpen())
+      {
+	 backend.Close();
+	 filefd->iFd = -1;
       }
 
       return LZ4F_isError(res) == false;
@@ -1875,11 +1882,12 @@ public:
 	 return filefd->FileFdError("ReadWrite mode is not supported for file %s", filefd->FileName.c_str());
 
       bool const Comp = (Mode & FileFd::WriteOnly) == FileFd::WriteOnly;
-      if (Comp == false)
+      if (Comp == false && filefd->iFd != -1)
       {
 	 // Handle 'decompression' of empty files
 	 struct stat Buf;
-	 fstat(filefd->iFd, &Buf);
+	 if (fstat(filefd->iFd, &Buf) != 0)
+	    return filefd->FileFdErrno("fstat", "Could not stat fd %d for file %s", filefd->iFd, filefd->FileName.c_str());
 	 if (Buf.st_size == 0 && S_ISFIFO(Buf.st_mode) == false)
 	    return true;
 
@@ -1974,6 +1982,11 @@ public:
    virtual bool InternalClose(std::string const &) APT_OVERRIDE
    {
       bool Ret = true;
+      if (filefd->iFd != -1)
+      {
+	 close(filefd->iFd);
+	 filefd->iFd = -1;
+      }
       if (compressor_pid > 0)
 	 Ret &= ExecWait(compressor_pid, "FileFdCompressor", true);
       compressor_pid = -1;
@@ -2363,7 +2376,7 @@ FileFd::~FileFd()
    gracefully. */
 bool FileFd::Read(void *To,unsigned long long Size,unsigned long long *Actual)
 {
-   if (d == nullptr)
+   if (d == nullptr || Failed())
       return false;
    ssize_t Res = 1;
    errno = 0;
@@ -2414,7 +2427,7 @@ bool FileFd::Read(void *To,unsigned long long Size,unsigned long long *Actual)
 char* FileFd::ReadLine(char *To, unsigned long long const Size)
 {
    *To = '\0';
-   if (d == nullptr)
+   if (d == nullptr || Failed())
       return nullptr;
    return d->InternalReadLine(To, Size);
 }
@@ -2422,6 +2435,8 @@ char* FileFd::ReadLine(char *To, unsigned long long const Size)
 // FileFd::Flush - Flush the file  					/*{{{*/
 bool FileFd::Flush()
 {
+   if (Failed())
+      return false;
    if (d == nullptr)
       return true;
 
@@ -2431,7 +2446,7 @@ bool FileFd::Flush()
 // FileFd::Write - Write to the file					/*{{{*/
 bool FileFd::Write(const void *From,unsigned long long Size)
 {
-   if (d == nullptr)
+   if (d == nullptr || Failed())
       return false;
    ssize_t Res = 1;
    errno = 0;
@@ -2487,7 +2502,7 @@ bool FileFd::Write(int Fd, const void *From, unsigned long long Size)
 // FileFd::Seek - Seek in the file					/*{{{*/
 bool FileFd::Seek(unsigned long long To)
 {
-   if (d == nullptr)
+   if (d == nullptr || Failed())
       return false;
    Flags &= ~HitEof;
    return d->InternalSeek(To);
@@ -2496,7 +2511,7 @@ bool FileFd::Seek(unsigned long long To)
 // FileFd::Skip - Skip over data in the file				/*{{{*/
 bool FileFd::Skip(unsigned long long Over)
 {
-   if (d == nullptr)
+   if (d == nullptr || Failed())
       return false;
    return d->InternalSkip(Over);
 }
@@ -2504,7 +2519,7 @@ bool FileFd::Skip(unsigned long long Over)
 // FileFd::Truncate - Truncate the file					/*{{{*/
 bool FileFd::Truncate(unsigned long long To)
 {
-   if (d == nullptr)
+   if (d == nullptr || Failed())
       return false;
    // truncating /dev/null is always successful - as we get an error otherwise
    if (To == 0 && FileName == "/dev/null")
@@ -2517,7 +2532,7 @@ bool FileFd::Truncate(unsigned long long To)
 /* */
 unsigned long long FileFd::Tell()
 {
-   if (d == nullptr)
+   if (d == nullptr || Failed())
       return false;
    off_t const Res = d->InternalTell();
    if (Res == (off_t)-1)
@@ -2580,7 +2595,7 @@ time_t FileFd::ModificationTime()
 unsigned long long FileFd::Size()
 {
    if (d == nullptr)
-      return false;
+      return 0;
    return d->InternalSize();
 }
 									/*}}}*/
@@ -2609,7 +2624,7 @@ bool FileFd::Close()
    }
 
    if ((Flags & Replace) == Replace) {
-      if (rename(TemporaryFileName.c_str(), FileName.c_str()) != 0)
+      if (Failed() == false && rename(TemporaryFileName.c_str(), FileName.c_str()) != 0)
 	 Res &= _error->Errno("rename",_("Problem renaming the file %s to %s"), TemporaryFileName.c_str(), FileName.c_str());
 
       FileName = TemporaryFileName; // for the unlink() below.
@@ -2644,13 +2659,12 @@ bool FileFd::FileFdErrno(const char *Function, const char *Description,...)
    va_list args;
    size_t msgSize = 400;
    int const errsv = errno;
-   while (true)
-   {
+   bool retry;
+   do {
       va_start(args,Description);
-      if (_error->InsertErrno(GlobalError::ERROR, Function, Description, args, errsv, msgSize) == false)
-	 break;
+      retry = _error->InsertErrno(GlobalError::ERROR, Function, Description, args, errsv, msgSize);
       va_end(args);
-   }
+   } while (retry);
    return false;
 }
 									/*}}}*/
@@ -2659,13 +2673,12 @@ bool FileFd::FileFdError(const char *Description,...) {
    Flags |= Fail;
    va_list args;
    size_t msgSize = 400;
-   while (true)
-   {
+   bool retry;
+   do {
       va_start(args,Description);
-      if (_error->Insert(GlobalError::ERROR, Description, args, msgSize) == false)
-	 break;
+      retry = _error->Insert(GlobalError::ERROR, Description, args, msgSize);
       va_end(args);
-   }
+   } while (retry);
    return false;
 }
 									/*}}}*/
@@ -2791,6 +2804,11 @@ bool Rename(std::string From, std::string To)				/*{{{*/
 									/*}}}*/
 bool Popen(const char* Args[], FileFd &Fd, pid_t &Child, FileFd::OpenMode Mode)/*{{{*/
 {
+   return Popen(Args, Fd, Child, Mode, true);
+}
+									/*}}}*/
+bool Popen(const char* Args[], FileFd &Fd, pid_t &Child, FileFd::OpenMode Mode, bool CaptureStderr)/*{{{*/
+{
    int fd;
    if (Mode != FileFd::ReadOnly && Mode != FileFd::WriteOnly)
       return _error->Error("Popen supports ReadOnly (x)or WriteOnly mode only");
@@ -2821,7 +2839,8 @@ bool Popen(const char* Args[], FileFd &Fd, pid_t &Child, FileFd::OpenMode Mode)/
       if(Mode == FileFd::ReadOnly)
       {
          dup2(fd, 1);
-         dup2(fd, 2);
+	 if (CaptureStderr == true)
+	    dup2(fd, 2);
       } else if(Mode == FileFd::WriteOnly)
          dup2(fd, 0);
 

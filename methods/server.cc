@@ -102,25 +102,7 @@ bool ServerState::HeaderLine(string Line)
    if (Line.empty() == true)
       return true;
 
-   string::size_type Pos = Line.find(' ');
-   if (Pos == string::npos || Pos+1 > Line.length())
-   {
-      // Blah, some servers use "connection:closes", evil.
-      Pos = Line.find(':');
-      if (Pos == string::npos || Pos + 2 > Line.length())
-	 return _error->Error(_("Bad header line"));
-      Pos++;
-   }
-
-   // Parse off any trailing spaces between the : and the next word.
-   string::size_type Pos2 = Pos;
-   while (Pos2 < Line.length() && isspace_ascii(Line[Pos2]) != 0)
-      Pos2++;
-
-   string Tag = string(Line,0,Pos);
-   string Val = string(Line,Pos2);
-
-   if (stringcasecmp(Tag.c_str(),Tag.c_str()+4,"HTTP") == 0)
+   if (Line.size() > 4 && stringcasecmp(Line.data(), Line.data()+4, "HTTP") == 0)
    {
       // Evil servers return no version
       if (Line[4] == '/')
@@ -130,7 +112,7 @@ bool ServerState::HeaderLine(string Line)
 	 {
 	    Code[0] = '\0';
 	    if (Owner != NULL && Owner->Debug == true)
-	       clog << "HTTP server doesn't give Reason-Phrase for " << Result << std::endl;
+	       clog << "HTTP server doesn't give Reason-Phrase for " << std::to_string(Result) << std::endl;
 	 }
 	 else if (elements != 4)
 	    return _error->Error(_("The HTTP server sent an invalid reply header"));
@@ -163,6 +145,21 @@ bool ServerState::HeaderLine(string Line)
 
       return true;
    }
+
+   // Blah, some servers use "connection:closes", evil.
+   // and some even send empty header fields…
+   string::size_type Pos = Line.find(':');
+   if (Pos == string::npos)
+      return _error->Error(_("Bad header line"));
+   ++Pos;
+
+   // Parse off any trailing spaces between the : and the next word.
+   string::size_type Pos2 = Pos;
+   while (Pos2 < Line.length() && isspace_ascii(Line[Pos2]) != 0)
+      Pos2++;
+
+   string const Tag(Line,0,Pos);
+   string const Val(Line,Pos2);
 
    if (stringcasecmp(Tag,"Content-Length:") == 0)
    {
@@ -223,8 +220,16 @@ bool ServerState::HeaderLine(string Line)
    if (stringcasecmp(Tag,"Connection:") == 0)
    {
       if (stringcasecmp(Val,"close") == 0)
+      {
 	 Persistent = false;
-      if (stringcasecmp(Val,"keep-alive") == 0)
+	 Pipeline = false;
+	 /* Some servers send error pages (as they are dynamically generated)
+	    for simplicity via a connection close instead of e.g. chunked,
+	    so assuming an always closing server only if we get a file + close */
+	 if (Result >= 200 && Result < 300)
+	    PipelineAllowed = false;
+      }
+      else if (stringcasecmp(Val,"keep-alive") == 0)
 	 Persistent = true;
       return true;
    }
@@ -527,6 +532,7 @@ int ServerMethod::Loop()
 	 {
 	    _error->Error(_("Bad header data"));
 	    Fail(true);
+	    Server->Close();
 	    RotateDNS();
 	    continue;
 	 }
@@ -607,10 +613,7 @@ int ServerMethod::Loop()
 			// yes, he did! Disable pipelining and rewrite queue
 			if (Server->Pipeline == true)
 			{
-			   // FIXME: fake a warning message as we have no proper way of communicating here
-			   std::string out;
-			   strprintf(out, _("Automatically disabled %s due to incorrect response from server/proxy. (man 5 apt.conf)"), "Acquire::http::PipelineDepth");
-			   std::cerr << "W: " << out << std::endl;
+			   Warning(_("Automatically disabled %s due to incorrect response from server/proxy. (man 5 apt.conf)"), "Acquire::http::Pipeline-Depth");
 			   Server->Pipeline = false;
 			   Server->PipelineAllowed = false;
 			   // we keep the PipelineDepth value so that the rest of the queue can be fixed up as well

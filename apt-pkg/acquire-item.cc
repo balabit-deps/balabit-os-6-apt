@@ -1804,6 +1804,18 @@ void pkgAcqDiffIndex::QueueOnIMSHit() const				/*{{{*/
    new pkgAcqIndexDiffs(Owner, TransactionManager, Target);
 }
 									/*}}}*/
+static bool RemoveFileForBootstrapLinking(bool const Debug, std::string const &For, std::string const &Boot)/*{{{*/
+{
+   if (FileExists(Boot) && RemoveFile("Bootstrap-linking", Boot) == false)
+   {
+      if (Debug)
+	 std::clog << "Bootstrap-linking for patching " << For
+	    << " by removing stale " << Boot << " failed!" << std::endl;
+      return false;
+   }
+   return true;
+}
+									/*}}}*/
 bool pkgAcqDiffIndex::ParseDiffIndex(string const &IndexDiffFile)	/*{{{*/
 {
    // failing here is fine: our caller will take care of trying to
@@ -2138,23 +2150,15 @@ bool pkgAcqDiffIndex::ParseDiffIndex(string const &IndexDiffFile)	/*{{{*/
       if (unlikely(Final.empty())) // because we wouldn't be called in such a case
 	 return false;
       std::string const PartialFile = GetPartialFileNameFromURI(Target.URI);
-      if (FileExists(PartialFile) && RemoveFile("Bootstrap-linking", PartialFile) == false)
-      {
-	 if (Debug)
-	    std::clog << "Bootstrap-linking for patching " << CurrentPackagesFile
-	       << " by removing stale " << PartialFile << " failed!" << std::endl;
+      std::string const PatchedFile = GetKeepCompressedFileName(PartialFile + "-patched", Target);
+      if (RemoveFileForBootstrapLinking(Debug, CurrentPackagesFile, PartialFile) == false ||
+	    RemoveFileForBootstrapLinking(Debug, CurrentPackagesFile, PatchedFile) == false)
 	 return false;
-      }
       for (auto const &ext : APT::Configuration::getCompressorExtensions())
       {
-	 std::string const Partial = PartialFile + ext;
-	 if (FileExists(Partial) && RemoveFile("Bootstrap-linking", Partial) == false)
-	 {
-	    if (Debug)
-	       std::clog << "Bootstrap-linking for patching " << CurrentPackagesFile
-		  << " by removing stale " << Partial << " failed!" << std::endl;
+	 if (RemoveFileForBootstrapLinking(Debug, CurrentPackagesFile, PartialFile + ext) == false ||
+	       RemoveFileForBootstrapLinking(Debug, CurrentPackagesFile, PatchedFile + ext) == false)
 	    return false;
-	 }
       }
       std::string const Ext = Final.substr(CurrentPackagesFile.length());
       std::string const Partial = PartialFile + Ext;
@@ -2435,9 +2439,10 @@ std::string pkgAcqIndexDiffs::Custom600Headers() const			/*{{{*/
    if(State != StateApplyDiff)
       return pkgAcqBaseIndex::Custom600Headers();
    std::ostringstream patchhashes;
-   HashStringList const ExpectedHashes = available_patches[0].patch_hashes;
-   for (HashStringList::const_iterator hs = ExpectedHashes.begin(); hs != ExpectedHashes.end(); ++hs)
-      patchhashes <<  "\nPatch-0-" << hs->HashType() << "-Hash: " << hs->HashValue();
+   for (auto && hs : available_patches[0].result_hashes)
+      patchhashes <<  "\nStart-" << hs.HashType() << "-Hash: " << hs.HashValue();
+   for (auto && hs : available_patches[0].patch_hashes)
+      patchhashes <<  "\nPatch-0-" << hs.HashType() << "-Hash: " << hs.HashValue();
    patchhashes << pkgAcqBaseIndex::Custom600Headers();
    return patchhashes.str();
 }
@@ -2584,6 +2589,8 @@ std::string pkgAcqIndexMergeDiffs::Custom600Headers() const		/*{{{*/
       return pkgAcqBaseIndex::Custom600Headers();
    std::ostringstream patchhashes;
    unsigned int seen_patches = 0;
+   for (auto && hs : (*allPatches)[0]->patch.result_hashes)
+      patchhashes <<  "\nStart-" << hs.HashType() << "-Hash: " << hs.HashValue();
    for (std::vector<pkgAcqIndexMergeDiffs *>::const_iterator I = allPatches->begin();
 	 I != allPatches->end(); ++I)
    {
@@ -2637,10 +2644,6 @@ void pkgAcqIndex::Init(string const &URI, string const &URIDesc,
    DestFile = GetPartialFileNameFromURI(URI);
    NextCompressionExtension(CurrentCompressionExtension, CompressionExtensions, false);
 
-   // store file size of the download to ensure the fetcher gives
-   // accurate progress reporting
-   FileSize = GetExpectedHashes().FileSize();
-
    if (CurrentCompressionExtension == "uncompressed")
    {
       Desc.URI = URI;
@@ -2677,6 +2680,9 @@ void pkgAcqIndex::Init(string const &URI, string const &URIDesc,
       DestFile = DestFile + '.' + CurrentCompressionExtension;
    }
 
+   // store file size of the download to ensure the fetcher gives
+   // accurate progress reporting
+   FileSize = GetExpectedHashes().FileSize();
 
    Desc.Description = URIDesc;
    Desc.Owner = this;
@@ -3239,7 +3245,8 @@ std::string pkgAcqChangelog::URI(pkgCache::VerIterator const &Ver)	/*{{{*/
       pkgCache::PkgIterator const Pkg = Ver.ParentPkg();
       if (Pkg->CurrentVer != 0 && Pkg.CurrentVer() == Ver)
       {
-	 std::string const basename = std::string("/usr/share/doc/") + Pkg.Name() + "/changelog";
+	 std::string const root = _config->FindDir("Dir");
+	 std::string const basename = root + std::string("usr/share/doc/") + Pkg.Name() + "/changelog";
 	 std::string const debianname = basename + ".Debian";
 	 if (FileExists(debianname))
 	    return "copy://" + debianname;

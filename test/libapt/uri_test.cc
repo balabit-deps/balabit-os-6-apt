@@ -1,4 +1,6 @@
 #include <config.h>
+#include <apt-pkg/configuration.h>
+#include <apt-pkg/proxy.h>
 #include <apt-pkg/strutl.h>
 #include <string>
 #include <gtest/gtest.h>
@@ -28,6 +30,18 @@ TEST(URITest, BasicHTTP)
    EXPECT_EQ("http://ualberta.ca", URI::SiteOnly(U));
    EXPECT_EQ("http://ualberta.ca/blah", URI::ArchiveOnly(U));
    EXPECT_EQ("http://ualberta.ca/blah", URI::NoUserPassword(U));
+   // just a user
+   U = URI("https://apt@example.org/blah");
+   EXPECT_EQ("https", U.Access);
+   EXPECT_EQ("apt", U.User);
+   EXPECT_EQ("", U.Password);
+   EXPECT_EQ(0, U.Port);
+   EXPECT_EQ("example.org", U.Host);
+   EXPECT_EQ("/blah", U.Path);
+   EXPECT_EQ("https://apt@example.org/blah", (std::string)U);
+   EXPECT_EQ("https://example.org", URI::SiteOnly(U));
+   EXPECT_EQ("https://example.org/blah", URI::ArchiveOnly(U));
+   EXPECT_EQ("https://example.org/blah", URI::NoUserPassword(U));
 }
 TEST(URITest, SingeSlashFile)
 {
@@ -175,4 +189,28 @@ TEST(URITest, RFC2732)
    EXPECT_EQ("ftp://example.org", URI::SiteOnly(U));
    EXPECT_EQ("ftp://example.org", URI::ArchiveOnly(U));
    EXPECT_EQ("ftp://example.org/", URI::NoUserPassword(U));
+}
+TEST(URITest, AutoProxyTest)
+{
+   URI u0("http://www.debian.org:90/temp/test");
+   URI u1("http://www.debian.org:91/temp/test");
+
+   _config->Set("Acquire::http::Proxy-Auto-Detect", "./apt-proxy-script");
+
+   // Scenario 0: Autodetecting a simple proxy
+   AutoDetectProxy(u0);
+   EXPECT_EQ(_config->Find("Acquire::http::proxy::www.debian.org", ""), "http://example.com");
+
+   // Scenario 1: Proxy stays the same if it is already set
+   AutoDetectProxy(u1);
+   EXPECT_EQ(_config->Find("Acquire::http::proxy::www.debian.org", ""), "http://example.com");
+
+   // Scenario 2: Reading with stderr output works fine
+   _config->Clear("Acquire::http::proxy::www.debian.org");
+   AutoDetectProxy(u1);
+   EXPECT_EQ(_config->Find("Acquire::http::proxy::www.debian.org", ""), "http://example.com/foo");
+
+   // Scenario 1 again: Proxy stays the same if it is already set
+   AutoDetectProxy(u0);
+   EXPECT_EQ(_config->Find("Acquire::http::proxy::www.debian.org", ""), "http://example.com/foo");
 }

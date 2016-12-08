@@ -414,7 +414,9 @@ bool pkgDPkgPM::RunScriptsWithPkgs(const char *Cnf)
    Opts = Opts->Child;
 
    sighandler_t old_sigpipe = signal(SIGPIPE, SIG_IGN);
-   
+   sighandler_t old_sigint = signal(SIGINT, SIG_IGN);
+   sighandler_t old_sigquit = signal(SIGQUIT, SIG_IGN);
+
    unsigned int Count = 1;
    for (; Opts != 0; Opts = Opts->Next, Count++)
    {
@@ -512,7 +514,9 @@ bool pkgDPkgPM::RunScriptsWithPkgs(const char *Cnf)
          break;
       }
    }
+   signal(SIGINT, old_sigint);
    signal(SIGPIPE, old_sigpipe);
+   signal(SIGQUIT, old_sigquit);
 
    return result;
 }
@@ -1216,6 +1220,15 @@ void pkgDPkgPM::StopPtyMagic()
  */
 bool pkgDPkgPM::Go(APT::Progress::PackageManager *progress)
 {
+   auto const ItemIsEssential = [](pkgDPkgPM::Item const &I) {
+      static auto const cachegen = _config->Find("pkgCacheGen::Essential");
+      if (cachegen == "none" || cachegen == "native")
+	 return true;
+      if (unlikely(I.Pkg.end()))
+	 return true;
+      return (I.Pkg->Flags & pkgCache::Flag::Essential) != 0;
+   };
+
    pkgPackageManager::SigINTStop = false;
    d->progress = progress;
 
@@ -1247,6 +1260,11 @@ bool pkgDPkgPM::Go(APT::Progress::PackageManager *progress)
 
    if (RunScriptsWithPkgs("DPkg::Pre-Install-Pkgs") == false)
       return false;
+
+   auto const noopDPkgInvocation = _config->FindB("Debug::pkgDPkgPM",false);
+   // store auto-bits as they are supposed to be after dpkg is run
+   if (noopDPkgInvocation == false)
+      Cache.writeStateFile(NULL);
 
    // support subpressing of triggers processing for special
    // cases like d-i that runs the triggers handling manually
@@ -1337,13 +1355,15 @@ bool pkgDPkgPM::Go(APT::Progress::PackageManager *progress)
       {
 	 case Item::Remove:
 	 ADDARGC("--force-depends");
-	 ADDARGC("--force-remove-essential");
+	 if (std::any_of(I, J, ItemIsEssential))
+	    ADDARGC("--force-remove-essential");
 	 ADDARGC("--remove");
 	 break;
 	 
 	 case Item::Purge:
 	 ADDARGC("--force-depends");
-	 ADDARGC("--force-remove-essential");
+	 if (std::any_of(I, J, ItemIsEssential))
+	    ADDARGC("--force-remove-essential");
 	 ADDARGC("--purge");
 	 break;
 	 
@@ -1434,7 +1454,7 @@ bool pkgDPkgPM::Go(APT::Progress::PackageManager *progress)
 
       J = I;
       
-      if (_config->FindB("Debug::pkgDPkgPM",false) == true)
+      if (noopDPkgInvocation == true)
       {
 	 for (std::vector<const char *>::const_iterator a = Args.begin();
 	      a != Args.end(); ++a)
@@ -1613,7 +1633,7 @@ bool pkgDPkgPM::Go(APT::Progress::PackageManager *progress)
    if (pkgPackageManager::SigINTStop)
        _error->Warning(_("Operation was interrupted before it could finish"));
 
-   if (_config->FindB("Debug::pkgDPkgPM",false) == false)
+   if (noopDPkgInvocation == false)
    {
       std::string const oldpkgcache = _config->FindFile("Dir::cache::pkgcache");
       if (oldpkgcache.empty() == false && RealFileExists(oldpkgcache) == true &&
@@ -1630,7 +1650,9 @@ bool pkgDPkgPM::Go(APT::Progress::PackageManager *progress)
       }
    }
 
-   Cache.writeStateFile(NULL);
+   // disappearing packages can forward their auto-bit
+   if (disappearedPkgs.empty() == false)
+      Cache.writeStateFile(NULL);
 
    d->progress->Stop();
 

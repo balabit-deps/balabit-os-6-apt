@@ -118,9 +118,9 @@ void ExecGPGV(std::string const &File, std::string const &FileGPG,
       if (sigFd == -1 || dataFd == -1)
       {
 	 if (dataFd != -1)
-	    unlink(sig);
-	 if (sigFd != -1)
 	    unlink(data);
+	 if (sigFd != -1)
+	    unlink(sig);
 	 ioprintf(std::cerr, "Couldn't create tempfiles for splitting up %s", File.c_str());
 	 exit(EINTERNAL);
       }
@@ -134,9 +134,9 @@ void ExecGPGV(std::string const &File, std::string const &FileGPG,
 	    SplitClearSignedFile(File, &message, &dataHeader, &signature) == false)
       {
 	 if (dataFd != -1)
-	    unlink(sig);
-	 if (sigFd != -1)
 	    unlink(data);
+	 if (sigFd != -1)
+	    unlink(sig);
 	 ioprintf(std::cerr, "Splitting up %s into data and signature failed", File.c_str());
 	 exit(112);
       }
@@ -235,6 +235,20 @@ void ExecGPGV(std::string const &File, std::string const &FileGPG,
 }
 									/*}}}*/
 // SplitClearSignedFile - split message into data/signature		/*{{{*/
+static int GetLineErrno(char **lineptr, size_t *n, FILE *stream, std::string const &InFile)
+{
+   int result;
+
+   errno = 0;
+   result = getline(lineptr, n, stream);
+   if (errno != 0)
+   {
+      _error->Errno("getline", "Could not read from %s", InFile.c_str());
+      return -1;
+   }
+
+   return result;
+}
 bool SplitClearSignedFile(std::string const &InFile, FileFd * const ContentFile,
       std::vector<std::string> * const ContentHeader, FileFd * const SignatureFile)
 {
@@ -250,7 +264,8 @@ bool SplitClearSignedFile(std::string const &InFile, FileFd * const ContentFile,
 
    char *buf = NULL;
    size_t buf_size = 0;
-   while (getline(&buf, &buf_size, in) != -1)
+   _error->PushToStack();
+   while (GetLineErrno(&buf, &buf_size, in, InFile) != -1)
    {
       _strrstrip(buf);
       if (found_message_start == false)
@@ -313,6 +328,18 @@ bool SplitClearSignedFile(std::string const &InFile, FileFd * const ContentFile,
    fclose(in);
    if (buf != NULL)
       free(buf);
+
+   // Flush the files. Errors will be checked below.
+   if (SignatureFile != nullptr)
+      SignatureFile->Flush();
+   if (ContentFile != nullptr)
+      ContentFile->Flush();
+
+   // An error occured during reading - propagate it up
+   bool const hasErrored = _error->PendingError();
+   _error->MergeWithStack();
+   if (hasErrored)
+      return false;
 
    if (found_signature == true)
       return _error->Error("Signature in file %s wasn't closed", InFile.c_str());
