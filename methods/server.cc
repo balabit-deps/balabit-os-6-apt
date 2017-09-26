@@ -163,6 +163,9 @@ bool ServerState::HeaderLine(string Line)
 
    if (stringcasecmp(Tag,"Content-Length:") == 0)
    {
+      auto ContentLength = strtoull(Val.c_str(), NULL, 10);
+      if (ContentLength == 0)
+	 return true;
       if (Encoding == Closes)
 	 Encoding = Stream;
       HaveContent = true;
@@ -171,7 +174,7 @@ bool ServerState::HeaderLine(string Line)
       if (Result == 416)
 	 DownloadSizePtr = &JunkSize;
 
-      *DownloadSizePtr = strtoull(Val.c_str(), NULL, 10);
+      *DownloadSizePtr = ContentLength;
       if (*DownloadSizePtr >= std::numeric_limits<unsigned long long>::max())
 	 return _error->Errno("HeaderLine", _("The HTTP server sent an invalid Content-Length header"));
       else if (*DownloadSizePtr == 0)
@@ -192,7 +195,11 @@ bool ServerState::HeaderLine(string Line)
       return true;
    }
 
-   if (stringcasecmp(Tag,"Content-Range:") == 0)
+   // The Content-Range field only has a meaning in HTTP/1.1 for the
+   // 206 (Partial Content) and 416 (Range Not Satisfiable) responses
+   // according to RFC7233 "Range Requests", §4.2, so only consider it
+   // for such responses.
+   if ((Result == 416 || Result == 206) && stringcasecmp(Tag,"Content-Range:") == 0)
    {
       HaveContent = true;
 

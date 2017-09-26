@@ -2376,7 +2376,7 @@ FileFd::~FileFd()
    gracefully. */
 bool FileFd::Read(void *To,unsigned long long Size,unsigned long long *Actual)
 {
-   if (d == nullptr || Failed())
+   if (d == nullptr)
       return false;
    ssize_t Res = 1;
    errno = 0;
@@ -2427,7 +2427,7 @@ bool FileFd::Read(void *To,unsigned long long Size,unsigned long long *Actual)
 char* FileFd::ReadLine(char *To, unsigned long long const Size)
 {
    *To = '\0';
-   if (d == nullptr || Failed())
+   if (d == nullptr)
       return nullptr;
    return d->InternalReadLine(To, Size);
 }
@@ -2435,8 +2435,6 @@ char* FileFd::ReadLine(char *To, unsigned long long const Size)
 // FileFd::Flush - Flush the file  					/*{{{*/
 bool FileFd::Flush()
 {
-   if (Failed())
-      return false;
    if (d == nullptr)
       return true;
 
@@ -2446,7 +2444,7 @@ bool FileFd::Flush()
 // FileFd::Write - Write to the file					/*{{{*/
 bool FileFd::Write(const void *From,unsigned long long Size)
 {
-   if (d == nullptr || Failed())
+   if (d == nullptr)
       return false;
    ssize_t Res = 1;
    errno = 0;
@@ -2502,7 +2500,7 @@ bool FileFd::Write(int Fd, const void *From, unsigned long long Size)
 // FileFd::Seek - Seek in the file					/*{{{*/
 bool FileFd::Seek(unsigned long long To)
 {
-   if (d == nullptr || Failed())
+   if (d == nullptr)
       return false;
    Flags &= ~HitEof;
    return d->InternalSeek(To);
@@ -2511,7 +2509,7 @@ bool FileFd::Seek(unsigned long long To)
 // FileFd::Skip - Skip over data in the file				/*{{{*/
 bool FileFd::Skip(unsigned long long Over)
 {
-   if (d == nullptr || Failed())
+   if (d == nullptr)
       return false;
    return d->InternalSkip(Over);
 }
@@ -2519,7 +2517,7 @@ bool FileFd::Skip(unsigned long long Over)
 // FileFd::Truncate - Truncate the file					/*{{{*/
 bool FileFd::Truncate(unsigned long long To)
 {
-   if (d == nullptr || Failed())
+   if (d == nullptr)
       return false;
    // truncating /dev/null is always successful - as we get an error otherwise
    if (To == 0 && FileName == "/dev/null")
@@ -2532,7 +2530,7 @@ bool FileFd::Truncate(unsigned long long To)
 /* */
 unsigned long long FileFd::Tell()
 {
-   if (d == nullptr || Failed())
+   if (d == nullptr)
       return false;
    off_t const Res = d->InternalTell();
    if (Res == (off_t)-1)
@@ -2595,7 +2593,7 @@ time_t FileFd::ModificationTime()
 unsigned long long FileFd::Size()
 {
    if (d == nullptr)
-      return 0;
+      return false;
    return d->InternalSize();
 }
 									/*}}}*/
@@ -2721,9 +2719,9 @@ std::vector<std::string> Glob(std::string const &pattern, int flags)
    return result;
 }
 									/*}}}*/
-std::string GetTempDir()						/*{{{*/
+static std::string APT_NONNULL(1) GetTempDirEnv(char const * const env)	/*{{{*/
 {
-   const char *tmpdir = getenv("TMPDIR");
+   const char *tmpdir = getenv(env);
 
 #ifdef P_tmpdir
    if (!tmpdir)
@@ -2735,10 +2733,15 @@ std::string GetTempDir()						/*{{{*/
 	 stat(tmpdir, &st) != 0 || (st.st_mode & S_IFDIR) == 0) // exists and is directory
       tmpdir = "/tmp";
    else if (geteuid() != 0 && // root can do everything anyway
-	 faccessat(-1, tmpdir, R_OK | W_OK | X_OK, AT_EACCESS | AT_SYMLINK_NOFOLLOW) != 0) // current user has rwx access to directory
+	 faccessat(AT_FDCWD, tmpdir, R_OK | W_OK | X_OK, AT_EACCESS) != 0) // current user has rwx access to directory
       tmpdir = "/tmp";
 
    return string(tmpdir);
+}
+									/*}}}*/
+std::string GetTempDir()						/*{{{*/
+{
+   return GetTempDirEnv("TMPDIR");
 }
 std::string GetTempDir(std::string const &User)
 {
@@ -2992,6 +2995,32 @@ bool DropPrivileges()							/*{{{*/
 
       if (pw->pw_uid != old_uid && (setuid(old_uid) != -1 || seteuid(old_uid) != -1))
 	 return _error->Error("Could restore a uid to root, privilege dropping did not work");
+   }
+
+   if (_config->FindB("APT::Sandbox::ResetEnvironment", true))
+   {
+      setenv("HOME", pw->pw_dir, 1);
+      setenv("USER", pw->pw_name, 1);
+      setenv("USERNAME", pw->pw_name, 1);
+      setenv("LOGNAME", pw->pw_name, 1);
+      auto const shell = flNotDir(pw->pw_shell);
+      if (shell == "false" || shell == "nologin")
+	 setenv("SHELL", "/bin/sh", 1);
+      else
+	 setenv("SHELL", pw->pw_shell, 1);
+      auto const apt_setenv_tmp = [](char const * const env) {
+	 auto const tmpdir = getenv(env);
+	 if (tmpdir != nullptr)
+	 {
+	    auto const ourtmpdir = GetTempDirEnv(env);
+	    if (ourtmpdir != tmpdir)
+	       setenv(env, ourtmpdir.c_str(), 1);
+	 }
+      };
+      apt_setenv_tmp("TMPDIR");
+      apt_setenv_tmp("TEMPDIR");
+      apt_setenv_tmp("TMP");
+      apt_setenv_tmp("TEMP");
    }
 
    return true;

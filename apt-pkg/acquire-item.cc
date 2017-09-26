@@ -1666,10 +1666,16 @@ void pkgAcqMetaSig::Done(string const &Message, HashStringList const &Hashes,
    }
    else if(MetaIndex->CheckAuthDone(Message) == true)
    {
-      if (TransactionManager->IMSHit == false)
+      auto const Releasegpg = GetFinalFilename();
+      auto const Release = MetaIndex->GetFinalFilename();
+      // if this is an IMS-Hit on Release ensure we also have the the Release.gpg file stored
+      // (previously an unknown pubkey) – but only if the Release file exists locally (unlikely
+      // event of InRelease removed from the mirror causing fallback but still an IMS-Hit)
+      if (TransactionManager->IMSHit == false ||
+	    (FileExists(Releasegpg) == false && FileExists(Release) == true))
       {
-	 TransactionManager->TransactionStageCopy(this, DestFile, GetFinalFilename());
-	 TransactionManager->TransactionStageCopy(MetaIndex, MetaIndex->DestFile, MetaIndex->GetFinalFilename());
+	 TransactionManager->TransactionStageCopy(this, DestFile, Releasegpg);
+	 TransactionManager->TransactionStageCopy(MetaIndex, MetaIndex->DestFile, Release);
       }
    }
 }
@@ -1836,6 +1842,7 @@ bool pkgAcqDiffIndex::ParseDiffIndex(string const &IndexDiffFile)	/*{{{*/
    HashStringList ServerHashes;
    unsigned long long ServerSize = 0;
 
+   auto const &posix = std::locale::classic();
    for (char const * const * type = HashString::SupportedHashes(); *type != NULL; ++type)
    {
       std::string tagname = *type;
@@ -1847,6 +1854,7 @@ bool pkgAcqDiffIndex::ParseDiffIndex(string const &IndexDiffFile)	/*{{{*/
       string hash;
       unsigned long long size;
       std::stringstream ss(tmp);
+      ss.imbue(posix);
       ss >> hash >> size;
       if (unlikely(hash.empty() == true))
 	 continue;
@@ -1925,6 +1933,7 @@ bool pkgAcqDiffIndex::ParseDiffIndex(string const &IndexDiffFile)	/*{{{*/
       string hash, filename;
       unsigned long long size;
       std::stringstream ss(tmp);
+      ss.imbue(posix);
 
       while (ss >> hash >> size >> filename)
       {
@@ -1983,6 +1992,7 @@ bool pkgAcqDiffIndex::ParseDiffIndex(string const &IndexDiffFile)	/*{{{*/
       string hash, filename;
       unsigned long long size;
       std::stringstream ss(tmp);
+      ss.imbue(posix);
 
       while (ss >> hash >> size >> filename)
       {
@@ -2020,6 +2030,7 @@ bool pkgAcqDiffIndex::ParseDiffIndex(string const &IndexDiffFile)	/*{{{*/
       string hash, filename;
       unsigned long long size;
       std::stringstream ss(tmp);
+      ss.imbue(posix);
 
       // FIXME: all of pdiff supports only .gz compressed patches
       while (ss >> hash >> size >> filename)
@@ -2596,7 +2607,7 @@ std::string pkgAcqIndexMergeDiffs::Custom600Headers() const		/*{{{*/
    {
       HashStringList const ExpectedHashes = (*I)->patch.patch_hashes;
       for (HashStringList::const_iterator hs = ExpectedHashes.begin(); hs != ExpectedHashes.end(); ++hs)
-	 patchhashes <<  "\nPatch-" << seen_patches << "-" << hs->HashType() << "-Hash: " << hs->HashValue();
+	 patchhashes <<  "\nPatch-" << std::to_string(seen_patches) << "-" << hs->HashType() << "-Hash: " << hs->HashValue();
       ++seen_patches;
    }
    patchhashes << pkgAcqBaseIndex::Custom600Headers();

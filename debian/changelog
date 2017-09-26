@@ -1,4 +1,117 @@
-apt (1.2.15ubuntu0.2) xenial-security; urgency=high
+apt (1.2.25) xenial; urgency=medium
+
+  * Microrelease covering 1.4.7 (LP: #1702326) and 1.4.8
+
+  [ Robert Luberda ]
+  * fix a "critical" typo in old changelog entry (Closes: 866358)
+
+  [ David Kalnischkies ]
+  * use port from SRV record instead of initial port
+  * don't ask an uninit _system for supported archs (LP: #1613184)
+
+  [ Julian Andres Klode ]
+  * Reset failure reason when connection was successful
+  * http: A response with Content-Length: 0 has no content
+  * apt-daily: Pull in network-online.target in service, not timer
+    (LP: #1716973)
+
+  [ Balint Reczey ]
+  * Gracefully terminate process when stopping apt-daily-upgrade (LP: #1690980)
+
+ -- Julian Andres Klode <juliank@ubuntu.com>  Tue, 26 Sep 2017 16:14:54 +0200
+
+apt (1.2.24) xenial; urgency=medium
+
+  * Microrelease covering fixes of 1.4.6
+  * Fix parsing of or groups in build-deps with ignored packages (LP: #1694697)
+  * apt.systemd.daily: Use unattended-ugrade --download-only if available.
+    Instead of passing -d, which enables a debugging mode; check if
+    unattended-upgrade supports an option --download-only (which is yet
+    to be implemented) and use that (Closes: #863859)
+
+ -- Julian Andres Klode <juliank@ubuntu.com>  Mon, 19 Jun 2017 13:58:04 +0200
+
+apt (1.2.23) xenial; urgency=medium
+
+  * Microrelease covering fixes of 1.4.4
+
+  [ Alan Jenkins ]
+  * apt.systemd.daily: fix error from locking code (Closes: #862567)
+
+ -- Julian Andres Klode <juliank@ubuntu.com>  Fri, 19 May 2017 11:28:01 +0200
+
+apt (1.2.22) xenial; urgency=medium
+
+  [ Julian Andres Klode ]
+  * Run unattended-upgrade -d in download part
+  * apt.systemd.daily: Add locking
+  * Split apt-daily timer into two (LP: #1686470)
+
+  [ Matt Kraai ]
+  * bash-completion: Fix spelling of autoclean (Closes: #861846)
+
+ -- Julian Andres Klode <juliank@ubuntu.com>  Fri, 05 May 2017 14:51:57 +0200
+
+apt (1.2.21) xenial; urgency=medium
+
+  * Microrelease covering fixes of 1.4 and 1.4.1
+
+  [ Julian Andres Klode ]
+  * Ignore \.ucf-[a-z]+$ like we do for \.dpkg-[a-z]+$
+  * systemd: Rework timing and add After=network-online (was LP #1615482)
+
+  [ David Kalnischkies ]
+  * Fix and avoid quoting in CommandLine::AsString (LP: #1672710)
+
+  [ Unit 193 ]
+  * apt-ftparchive: Support '.ddeb' dbgsym packages
+
+ -- Julian Andres Klode <juliank@ubuntu.com>  Tue, 25 Apr 2017 21:00:06 +0200
+
+apt (1.2.20) xenial; urgency=medium
+
+  * Microrelease covering fixes of 1.4~rc2 (LP: #1668285)
+
+  [ David Kalnischkies ]
+  * don't install new deps of candidates for kept back pkgs
+  * keep Release.gpg on untrusted to trusted IMS-Hit (Closes: 838779)
+    (LP: #1657440)
+  * reset HOME, USER(NAME), TMPDIR & SHELL in DropPrivileges (Closes: 842877)
+  * add TMP/TEMP/TEMPDIR to the TMPDIR DropPrivileges dance
+  * let {dsc,tar,diff}-only implicitly enable download-only
+  * don't show update stats if cache generation is disabled
+  * don't lock dpkg in 'apt-get clean'
+  * don't lock dpkg in update commands
+  * avoid validate/delete/load race in cache generation
+  * remove 'old' FAILED files in the next acquire call (Closes: 846476)
+  * stop rred from leaking debug messages on recovered errors (Closes: #850759)
+
+  [ Paul Wise ]
+  * show output as documented for APT::Periodic::Verbose 2 (Closes: 845599)
+
+  [ John R. Lenton ]
+  * bash-completion: Only complete understood file paths for install
+    (LP: #1645815)
+
+  [ Lukasz Kawczynski ]
+  * Honour Acquire::ForceIPv4/6 in the https transport
+
+  [ Julian Andres Klode ]
+  * basehttp: Only read Content-Range on 416 and 206 responses (LP: #1657567)
+  * Only merge acquire items with the same meta key (Closes: #838441)
+  * Do not package names representing .dsc/.deb/... files (Closes: #854794)
+  * Don't use -1 fd and AT_SYMLINK_NOFOLLOW for faccessat()
+    Thanks to James Clarke for debugging these issues
+
+ -- Julian Andres Klode <juliank@ubuntu.com>  Mon, 27 Feb 2017 15:29:18 +0100
+
+apt (1.2.19) xenial; urgency=medium
+
+  * https: Quote path in URL before passing it to curl (LP: #1651923)
+
+ -- Julian Andres Klode <juliank@ubuntu.com>  Tue, 17 Jan 2017 15:48:51 +0100
+
+apt (1.2.18) xenial; urgency=high
 
   * SECURITY UPDATE: gpgv: Check for errors when splitting files (CVE-2016-1252)
     Thanks to Jann Horn, Google Project Zero for reporting the issue
@@ -6,6 +119,38 @@ apt (1.2.15ubuntu0.2) xenial-security; urgency=high
   * gpgv: Flush the files before checking for errors
 
  -- Julian Andres Klode <juliank@ubuntu.com>  Thu, 08 Dec 2016 15:28:08 +0100
+
+apt (1.2.17) xenial; urgency=medium
+
+  [ David Kalnischkies ]
+  * apt-key: warn instead of fail on unreadable keyrings (LP: #1642386)
+  * show apt-key warnings in apt update (Closes: 834973)
+
+  [ Julian Andres Klode ]
+  * test-releasefile-verification: installaptold: Clean up before run
+
+ -- Julian Andres Klode <juliank@ubuntu.com>  Wed, 23 Nov 2016 20:09:27 +0100
+
+apt (1.2.16) xenial; urgency=medium
+
+  [ David Kalnischkies ]
+  * avoid changing the global LC_TIME for Release writing
+  * use de-localed std::put_time instead rolling our own
+  * accept only the expected UTC timezones in date parsing (Closes: 819697)
+  * avoid std::get_time usage to sidestep libstdc++6 bug (LP: #1593583)
+  * imbue datetime parsing with C.UTF-8 locale (Closes: 828011)
+  * prevent C++ locale number formatting in text APIs (try 2) (Closes: 832044)
+  * prevent C++ locale number formatting in text APIs (try 3) (LP: #1611010)
+    (LP: #1592817)
+  * imbue .diff/Index parsing with C.UTF-8 as well
+
+  [ Julian Andres Klode ]
+  * Use C locale instead of C.UTF-8 for protocol strings
+  * Add shippable.yml for CI on Shippable
+  * Revert "if the FileFd failed already following calls should fail, too"
+    (LP: #1641905)
+
+ -- Julian Andres Klode <juliank@ubuntu.com>  Tue, 15 Nov 2016 11:29:04 +0100
 
 apt (1.2.15) xenial; urgency=medium
 
@@ -2771,7 +2916,7 @@ apt (0.9.7.9~exp1) experimental; urgency=low
 
  -- Michael Vogt <mvo@debian.org>  Fri, 22 Mar 2013 21:57:08 +0100
 
-apt (0.9.7.8) unstable; urgency=criticial
+apt (0.9.7.8) unstable; urgency=critical
 
   * SECURITY UPDATE: InRelease verification bypass
     - CVE-2013-1051

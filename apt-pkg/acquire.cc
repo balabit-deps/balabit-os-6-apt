@@ -117,6 +117,12 @@ static bool SetupAPTPartialDirectory(std::string const &grand, std::string const
    if (chmod(partial.c_str(), 0700) != 0)
       _error->WarningE("SetupAPTPartialDirectory", "chmod 0700 of directory %s failed", partial.c_str());
 
+   _error->PushToStack();
+   // remove 'old' FAILED files to stop us from collecting them for no reason
+   for (auto const &Failed: GetListOfFilesInDir(partial, "FAILED", false, false))
+      RemoveFile("SetupAPTPartialDirectory", Failed);
+   _error->RevertToStack();
+
    return true;
 }
 bool pkgAcquire::Setup(pkgAcquireStatus *Progress, string const &Lock)
@@ -837,10 +843,26 @@ pkgAcquire::Queue::~Queue()
 /* */
 bool pkgAcquire::Queue::Enqueue(ItemDesc &Item)
 {
+   // MetaKeysMatch checks whether the two items have no non-matching
+   // meta-keys. If the items are not transaction items, it returns
+   // true, so other items can still be merged.
+   auto MetaKeysMatch = [](pkgAcquire::ItemDesc const &A, pkgAcquire::Queue::QItem const *B) {
+      auto OwnerA = dynamic_cast<pkgAcqTransactionItem*>(A.Owner);
+      if (OwnerA == nullptr)
+	 return true;
+
+      for (auto const & OwnerBUncast : B->Owners) {
+	 auto OwnerB = dynamic_cast<pkgAcqTransactionItem*>(OwnerBUncast);
+
+	 if (OwnerB != nullptr && OwnerA->GetMetaKey() != OwnerB->GetMetaKey())
+	    return false;
+      }
+      return true;
+   };
    QItem **I = &Items;
    // move to the end of the queue and check for duplicates here
    for (; *I != 0; I = &(*I)->Next)
-      if (Item.URI == (*I)->URI)
+      if (Item.URI == (*I)->URI && MetaKeysMatch(Item, *I))
       {
 	 if (_config->FindB("Debug::pkgAcquire::Worker",false) == true)
 	    std::cerr << " @ Queue: Action combined for " << Item.URI << " and " << (*I)->URI << std::endl;
@@ -1247,8 +1269,11 @@ bool pkgAcquireStatus::Pulse(pkgAcquire *Owner)
 	 snprintf(msg,sizeof(msg), _("Retrieving file %li of %li"), i, TotalItems);
 
       // build the status str
-      std::string dlstatus;
-      strprintf(dlstatus, "dlstatus:%ld:%.4f:%s\n", i, Percent, msg);
+      std::ostringstream str;
+      str.imbue(std::locale::classic());
+      str.precision(4);
+      str << "dlstatus" << ':' << std::fixed << i << ':' << Percent << ':' << msg << '\n';
+      auto const dlstatus = str.str();
       FileFd::Write(fd, dlstatus.data(), dlstatus.size());
    }
 
