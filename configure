@@ -2475,7 +2475,7 @@ ac_config_headers="$ac_config_headers include/config.h:buildlib/config.h.in incl
 
 
 PACKAGE="apt"
-PACKAGE_VERSION="1.2.32"
+PACKAGE_VERSION="1.2.32ubuntu0.1"
 PACKAGE_MAIL="APT Development Team <deity@lists.debian.org>"
 cat >>confdefs.h <<_ACEOF
 #define PACKAGE "$PACKAGE"
