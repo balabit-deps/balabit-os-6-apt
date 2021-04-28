@@ -1,4 +1,25 @@
-apt (1.2.32ubuntu0.2) xenial-security; urgency=high
+apt (1.2.35) xenial; urgency=medium
+
+  * Backport JSON hooks, version 0.2, to xenial (LP: #1926150). The JSON code
+    files are identical to that of 2.3.2, only the integration and test cases
+    needed minor adjustment to behave correctly, especially:
+    - In private-install.cc, exit before showing the list of packages to
+      upgrade/install/etc, in case an error is already set. This moves the
+      behavior closer to bionic.
+  * Backport zstd support for Launchpad zstd enablement (LP: #1926437)
+  * Fix indendation of changelog message in 1.2.34 changelog.
+  * Bug fixes needed for JSON hooks:
+    - private-install: Handle existing errors before showing lists
+    - Avoid duplicated error in `apt search`
+  * Bug fixes affecting CI / autopkgtest only:
+    - prepare-release: Ignore alternative build dependencies
+    - tests: Do not expect requested-by if sudo was invoked by root
+    - tests: Export TZ=UTC to work around test failures on non-UTC hosts
+    - tests: avoid time-dependent rebuild of caches
+
+ -- Julian Andres Klode <juliank@ubuntu.com>  Wed, 28 Apr 2021 14:55:54 +0200
+
+apt (1.2.34) xenial-security; urgency=high
 
   * SECURITY UPDATE: Integer overflow in parsing (LP: #1899193)
     - apt-pkg/contrib/arfile.cc: add extra checks.
@@ -8,10 +29,11 @@ apt (1.2.32ubuntu0.2) xenial-security; urgency=high
     - CVE-2020-27350
   * Additional hardening:
     - apt-pkg/contrib/tarfile.cc: Limit size of long names and links to 1 MiB
+  * (upstream re-release of 1.2.34)
 
  -- Julian Andres Klode <juliank@ubuntu.com>  Mon, 07 Dec 2020 12:24:07 +0100
 
-apt (1.2.32ubuntu0.1) xenial-security; urgency=high
+apt (1.2.33) xenial-security; urgency=high
 
   * SECURITY UPDATE: Out of bounds read in ar, tar implementations (LP: #1878177)
     - apt-pkg/contrib/arfile.cc: Fix out-of-bounds read in member name
@@ -21,8 +43,9 @@ apt (1.2.32ubuntu0.1) xenial-security; urgency=high
       member names in error path
     - CVE-2020-3810
   * Add .gitlab-ci.yml for CI testing on Salsa
+  * (upstream re-release of 1.2.34)
 
- -- Julian Andres Klode <juliank@ubuntu.com>  Tue, 12 May 2020 20:42:53 +0200
+ -- Julian Andres Klode <juliank@ubuntu.com>  Thu, 14 May 2020 11:36:41 +0200
 
 apt (1.2.32) xenial; urgency=medium
 

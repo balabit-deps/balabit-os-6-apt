@@ -19,7 +19,7 @@ AC_CONFIG_AUX_DIR(buildlib)
 AC_CONFIG_HEADER(include/config.h:buildlib/config.h.in include/apti18n.h:buildlib/apti18n.h.in)
 
 PACKAGE="apt"
-PACKAGE_VERSION="1.2.32ubuntu0.2"
+PACKAGE_VERSION="1.2.35"
 PACKAGE_MAIL="APT Development Team <deity@lists.debian.org>"
 AC_DEFINE_UNQUOTED(PACKAGE,"$PACKAGE")
 AC_DEFINE_UNQUOTED(PACKAGE_VERSION,"$PACKAGE_VERSION")
@@ -134,6 +134,12 @@ AC_SUBST(HAVE_SYSTEMD)
 PKG_CHECK_MODULES([SYSTEMD], [libsystemd >= 221],
        [HAVE_SYSTEMD=yes
 	AC_DEFINE(HAVE_SYSTEMD)])
+
+HAVE_ZSTD=no
+AC_SUBST(HAVE_ZSTD)
+PKG_CHECK_MODULES([ZSTD], [libzstd >= 1],
+       [HAVE_ZSTD=yes
+	AC_DEFINE(HAVE_ZSTD)])
 
 dnl Converts the ARCH to be something singular for this general CPU family
 dnl This is often the dpkg architecture string.
